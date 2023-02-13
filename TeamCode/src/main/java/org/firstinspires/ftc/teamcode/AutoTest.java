@@ -2,10 +2,12 @@ package org.firstinspires.ftc.teamcode;
 
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
-import com.qualcomm.hardware.bosch.BHI260APIMU;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.hardware.bosch.BHI260IMU;
+import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
@@ -23,7 +25,7 @@ import java.util.ArrayList;
 public class AutoTest extends LinearOpMode {
 
     private DcMotor leftMotor, rightMotor;
-    BHI260APIMU               imu;
+    BHI260IMU              imu;
     Orientation             lastAngles = new Orientation();
     double                  globalAngle, power = .30, correction, rotation;
     boolean                 aButton, bButton, touched;
@@ -66,17 +68,12 @@ public class AutoTest extends LinearOpMode {
         rightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         leftMotor.setDirection(DcMotor.Direction.REVERSE);
 
-        BHI260APIMU.Parameters parameters = new BHI260APIMU.Parameters();
-
-        parameters.mode                = BHI260APIMU.SensorMode.IMU;
-        parameters.angleUnit           = BHI260APIMU.AngleUnit.DEGREES;
-        parameters.accelUnit           = BHI260APIMU.AccelUnit.METERS_PERSEC_PERSEC;
-        parameters.loggingEnabled      = false;
+        BHI260IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(RevHubOrientationOnRobot.LogoFacingDirection.DOWN, RevHubOrientationOnRobot.UsbFacingDirection.BACKWARD));
 
         // Retrieve and initialize the IMU. We expect the IMU to be attached to an I2C port
         // on a Core Device Interface Module, configured to be a sensor of type "AdaFruit IMU",
         // and named "imu".
-        imu = hardwareMap.get(BHI260APIMU.class, "imu");
+        imu = hardwareMap.get(BHI260IMU.class, "imu");
 
         imu.initialize(parameters);
 
@@ -103,17 +100,6 @@ public class AutoTest extends LinearOpMode {
         pidDrive = new PIDController(.05, 0, 0);
 
         telemetry.addData("Mode", "calibrating...");
-        telemetry.update();
-
-        // make sure the imu gyro is calibrated before continuing.
-        while (!isStopRequested() && !imu.isGyroCalibrated())
-        {
-            sleep(50);
-            idle();
-        }
-
-        telemetry.addData("Mode", "waiting for start");
-        telemetry.addData("imu calib status", imu.getCalibrationStatus().toString());
         telemetry.update();
 
         // wait for start button.
@@ -191,7 +177,7 @@ public class AutoTest extends LinearOpMode {
      */
     private void resetAngle()
     {
-        lastAngles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+        lastAngles = imu.getRobotOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
 
         globalAngle = 0;
     }
@@ -207,7 +193,7 @@ public class AutoTest extends LinearOpMode {
         // returned as 0 to +180 or 0 to -180 rolling back to -179 or +179 when rotation passes
         // 180 degrees. We detect this transition and track the total cumulative angle of rotation.
 
-        Orientation angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+        Orientation angles = imu.getRobotOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
 
         double deltaAngle = angles.firstAngle - lastAngles.firstAngle;
 
