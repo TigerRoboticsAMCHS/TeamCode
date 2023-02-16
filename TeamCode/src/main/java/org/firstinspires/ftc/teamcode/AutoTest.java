@@ -2,18 +2,16 @@ package org.firstinspires.ftc.teamcode;
 
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
+import com.qualcomm.hardware.bosch.BHI260IMU;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.hardware.bosch.BHI260IMU;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
-import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
-import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.openftc.apriltag.AprilTagDetection;
 import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
@@ -25,11 +23,6 @@ import java.util.ArrayList;
 public class AutoTest extends LinearOpMode {
 
     private DcMotor leftMotor, rightMotor;
-    BHI260IMU              imu;
-    Orientation             lastAngles = new Orientation();
-    double                  globalAngle, power = .30, correction, rotation;
-    boolean                 aButton, bButton, touched;
-    PIDController           pidRotate, pidDrive;
     OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
 
@@ -54,6 +47,17 @@ public class AutoTest extends LinearOpMode {
     final int THRESHOLD_NUM_FRAMES_NO_DETECTION_BEFORE_LOW_DECIMATION = 4;
     boolean found= false;
 
+    double wheelCircumference = 3.14159 * 0.09; // meters
+
+    //pid stuff
+    double integralSum = 0;
+    double Kp = 0;
+    double Ki = 0;
+    double Kd = 0;
+    ElapsedTime timer  = new ElapsedTime();
+    private double lastError = 0;
+    private BHI260IMU imu;
+
     @Override
     public void runOpMode() {
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
@@ -67,14 +71,13 @@ public class AutoTest extends LinearOpMode {
         leftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         leftMotor.setDirection(DcMotor.Direction.REVERSE);
+        leftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rightMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        leftMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        rightMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         BHI260IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(RevHubOrientationOnRobot.LogoFacingDirection.DOWN, RevHubOrientationOnRobot.UsbFacingDirection.BACKWARD));
-
-        // Retrieve and initialize the IMU. We expect the IMU to be attached to an I2C port
-        // on a Core Device Interface Module, configured to be a sensor of type "AdaFruit IMU",
-        // and named "imu".
         imu = hardwareMap.get(BHI260IMU.class, "imu");
-
         imu.initialize(parameters);
 
         camera.setPipeline(aprilTagDetectionPipeline);
@@ -90,16 +93,7 @@ public class AutoTest extends LinearOpMode {
             }
         });
 
-        // Set PID proportional value to start reducing power at about 50 degrees of rotation.
-        // P by itself may stall before turn completed so we add a bit of I (integral) which
-        // causes the PID controller to gently increase power if the turn is not completed.
-        pidRotate = new PIDController(.003, .00003, 0);
-
-        // Set PID proportional value to produce non-zero correction value when robot veers off
-        // straight line. P value controls how sensitive the correction is.
-        pidDrive = new PIDController(.05, 0, 0);
-
-        telemetry.addData("Mode", "calibrating...");
+        telemetry.addData("Mode", "waiting");
         telemetry.update();
 
         // wait for start button.
@@ -111,12 +105,7 @@ public class AutoTest extends LinearOpMode {
         telemetry.update();
 
         sleep(1000);
-
-        // Set up parameters for driving in a straight line.
-        pidDrive.setSetpoint(0);
-        pidDrive.setOutputRange(0, power);
-        pidDrive.setInputRange(-90, 90);
-        pidDrive.enable();
+        int idFound = -1;
 
         while (opModeIsActive()) {
             // Calling getDetectionsUpdate() will only return an object if there was a new frame
@@ -159,124 +148,67 @@ public class AutoTest extends LinearOpMode {
                         telemetry.addLine(String.format("Rotation Yaw: %.2f degrees", Math.toDegrees(detection.pose.yaw)));
                         telemetry.addLine(String.format("Rotation Pitch: %.2f degrees", Math.toDegrees(detection.pose.pitch)));
                         telemetry.addLine(String.format("Rotation Roll: %.2f degrees", Math.toDegrees(detection.pose.roll)));
+                        idFound = detection.id;
                     }
                     if(!found) {
-                        rotate(-90, power);
+                        driveDistance(0.3, 1);
+                        double referenceAngle = Math.toRadians(90);
+                        double power = PIDControl(referenceAngle, getYaw());
+                        leftMotor.setPower(power);
+                        rightMotor.setPower(-power);
                     }
                     found = true;
                 }
-
                 telemetry.update();
             }
-
-            sleep(20);
-        }
-    }
-    /**
-     * Resets the cumulative angle tracking to zero.
-     */
-    private void resetAngle()
-    {
-        lastAngles = imu.getRobotOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
-
-        globalAngle = 0;
-    }
-
-    /**
-     * Get current cumulative angle rotation from last reset.
-     * @return Angle in degrees. + = left, - = right from zero point.
-     */
-    private double getAngle()
-    {
-        // We experimentally determined the Z axis is the axis we want to use for heading angle.
-        // We have to process the angle because the imu works in euler angles so the Z axis is
-        // returned as 0 to +180 or 0 to -180 rolling back to -179 or +179 when rotation passes
-        // 180 degrees. We detect this transition and track the total cumulative angle of rotation.
-
-        Orientation angles = imu.getRobotOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
-
-        double deltaAngle = angles.firstAngle - lastAngles.firstAngle;
-
-        if (deltaAngle < -180)
-            deltaAngle += 360;
-        else if (deltaAngle > 180)
-            deltaAngle -= 360;
-
-        globalAngle += deltaAngle;
-
-        lastAngles = angles;
-
-        return globalAngle;
-    }
-
-    /**
-     * Rotate left or right the number of degrees. Does not support turning more than 359 degrees.
-     * @param degrees Degrees to turn, + is left - is right
-     */
-    private void rotate(int degrees, double power)
-    {
-        // restart imu angle tracking.
-        resetAngle();
-
-        // if degrees > 359 we cap at 359 with same sign as original degrees.
-        if (Math.abs(degrees) > 359) degrees = (int) Math.copySign(359, degrees);
-
-        // start pid controller. PID controller will monitor the turn angle with respect to the
-        // target angle and reduce power as we approach the target angle. This is to prevent the
-        // robots momentum from overshooting the turn after we turn off the power. The PID controller
-        // reports onTarget() = true when the difference between turn angle and target angle is within
-        // 1% of target (tolerance) which is about 1 degree. This helps prevent overshoot. Overshoot is
-        // dependant on the motor and gearing configuration, starting power, weight of the robot and the
-        // on target tolerance. If the controller overshoots, it will reverse the sign of the output
-        // turning the robot back toward the setpoint value.
-
-        pidRotate.reset();
-        pidRotate.setSetpoint(degrees);
-        pidRotate.setInputRange(0, degrees);
-        pidRotate.setOutputRange(0, power);
-        pidRotate.setTolerance(1);
-        pidRotate.enable();
-
-        // getAngle() returns + when rotating counter clockwise (left) and - when rotating
-        // clockwise (right).
-
-        // rotate until turn is completed.
-
-        if (degrees < 0)
-        {
-            // On right turn we have to get off zero first.
-            while (opModeIsActive() && getAngle() == 0)
-            {
+            if(found) {
+                driveDistance(0.4, 20);
+                double referenceAngle = Math.toRadians(90);
+                double power = PIDControl(referenceAngle, getYaw());
                 leftMotor.setPower(power);
                 rightMotor.setPower(-power);
-                sleep(100);
             }
-
-            do
-            {
-                power = pidRotate.performPID(getAngle()); // power will be - on right turn.
-                leftMotor.setPower(-power);
-                rightMotor.setPower(power);
-            } while (opModeIsActive() && !pidRotate.onTarget());
         }
-        else    // left turn.
-            do
-            {
-                power = pidRotate.performPID(getAngle()); // power will be + on left turn.
-                leftMotor.setPower(-power);
-                rightMotor.setPower(power);
-            } while (opModeIsActive() && !pidRotate.onTarget());
-
-        // turn the motors off.
+    }
+    public void driveDistance(double power, double distance) {
+        leftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rightMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        double rotationsNeeded = distance/wheelCircumference;
+        rotationsNeeded /= 20;
+        int targetValue = (int) (rotationsNeeded * 537.6);
+        rightMotor.setTargetPosition(targetValue);
+        leftMotor.setTargetPosition(targetValue);
+        rightMotor.setPower(power);
+        leftMotor.setPower(power);
+        rightMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        leftMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        while(leftMotor.isBusy() || rightMotor.isBusy()) {
+            telemetry.addData("Right encoder value", rightMotor.getCurrentPosition());
+            telemetry.addData("left encoder value", leftMotor.getCurrentPosition());
+        }
         rightMotor.setPower(0);
         leftMotor.setPower(0);
-
-        rotation = getAngle();
-
-        // wait for rotation to stop.
-        sleep(500);
-
-        // reset angle tracking on new heading.
-        resetAngle();
+    }
+    public double PIDControl(double reference, double state) {
+        double error = angleWrap(reference - state);
+        integralSum += error * timer.seconds();
+        double derivative = (error - lastError) / timer.seconds();
+        lastError = error;
+        timer.reset();
+        double output = (error * Kp) + (derivative * Kd) + (integralSum * Ki);
+        return output;
+    }
+    public double getYaw() {
+        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+    }
+    public double angleWrap(double radians) {
+        // allows us to turn the shortest distance to what we want
+        while(radians > Math.PI) {
+            radians -= 2 * Math.PI;
+        }
+        while(radians < Math.PI) {
+            radians += 2 * Math.PI;
+        }
+        return radians;
     }
 }
