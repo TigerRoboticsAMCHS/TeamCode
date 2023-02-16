@@ -45,15 +45,16 @@ public class AutoTest extends LinearOpMode {
     final float DECIMATION_LOW = 2;
     final float THRESHOLD_HIGH_DECIMATION_RANGE_METERS = 1.0f;
     final int THRESHOLD_NUM_FRAMES_NO_DETECTION_BEFORE_LOW_DECIMATION = 4;
-    boolean found= false;
+    boolean found = false;
+    int turn = 0;
 
     double wheelCircumference = 3.14159 * 0.09; // meters
 
     //pid stuff
     double integralSum = 0;
-    double Kp = 0;
-    double Ki = 0;
-    double Kd = 0;
+    double Kp = PIDConstants.Kp;
+    double Ki = PIDConstants.Ki;
+    double Kd = PIDConstants.Kd;
     ElapsedTime timer  = new ElapsedTime();
     private double lastError = 0;
     private BHI260IMU imu;
@@ -70,15 +71,14 @@ public class AutoTest extends LinearOpMode {
         rightMotor = hardwareMap.get(DcMotor.class, "rightMotor");
         leftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        leftMotor.setDirection(DcMotor.Direction.REVERSE);
-        leftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        rightMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rightMotor.setDirection(DcMotor.Direction.REVERSE);
         leftMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         BHI260IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(RevHubOrientationOnRobot.LogoFacingDirection.DOWN, RevHubOrientationOnRobot.UsbFacingDirection.BACKWARD));
         imu = hardwareMap.get(BHI260IMU.class, "imu");
         imu.initialize(parameters);
+        imu.resetYaw();
 
         camera.setPipeline(aprilTagDetectionPipeline);
         camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener() {
@@ -119,6 +119,7 @@ public class AutoTest extends LinearOpMode {
                 telemetry.addData("FPS", camera.getFps());
                 telemetry.addData("Overhead ms", camera.getOverheadTimeMs());
                 telemetry.addData("Pipeline ms", camera.getPipelineTimeMs());
+                telemetry.addData("rotation", Math.toDegrees(getYaw()));
 
                 // If we don't see any tags
                 if (detections.size() == 0) {
@@ -151,37 +152,32 @@ public class AutoTest extends LinearOpMode {
                         idFound = detection.id;
                     }
                     if(!found) {
-                        driveDistance(0.3, 1);
-                        double referenceAngle = Math.toRadians(90);
-                        double power = PIDControl(referenceAngle, getYaw());
-                        leftMotor.setPower(power);
-                        rightMotor.setPower(-power);
+//                        driveDistance(0.3, 0.6096);
                     }
                     found = true;
                 }
                 telemetry.update();
             }
             if(found) {
-                driveDistance(0.4, 20);
                 double referenceAngle = Math.toRadians(90);
                 double power = PIDControl(referenceAngle, getYaw());
+                telemetry.addData("motor power", power);
                 leftMotor.setPower(power);
                 rightMotor.setPower(-power);
             }
         }
     }
     public void driveDistance(double power, double distance) {
-        leftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         rightMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        leftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         double rotationsNeeded = distance/wheelCircumference;
-        rotationsNeeded /= 20;
         int targetValue = (int) (rotationsNeeded * 537.6);
         rightMotor.setTargetPosition(targetValue);
         leftMotor.setTargetPosition(targetValue);
-        rightMotor.setPower(power);
-        leftMotor.setPower(power);
         rightMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         leftMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        rightMotor.setPower(power);
+        leftMotor.setPower(power);
         while(leftMotor.isBusy() || rightMotor.isBusy()) {
             telemetry.addData("Right encoder value", rightMotor.getCurrentPosition());
             telemetry.addData("left encoder value", leftMotor.getCurrentPosition());
@@ -206,7 +202,7 @@ public class AutoTest extends LinearOpMode {
         while(radians > Math.PI) {
             radians -= 2 * Math.PI;
         }
-        while(radians < Math.PI) {
+        while(radians < -Math.PI) {
             radians += 2 * Math.PI;
         }
         return radians;

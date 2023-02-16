@@ -12,15 +12,24 @@ public class FullOpMode extends LinearOpMode {
     private DcMotor leftLift, rightLift;
     private DcMotor leftMotor, rightMotor;
     private Servo claw;
+    private Servo claw2;
 
     public void runOpMode() {
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
         leftMotor = hardwareMap.get(DcMotor.class, "leftMotor");
         rightMotor = hardwareMap.get(DcMotor.class, "rightMotor");
+        leftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        rightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        rightMotor.setDirection(DcMotor.Direction.REVERSE);
+        leftMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        rightMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         leftLift = hardwareMap.get(DcMotor.class, "leftLift");
         rightLift = hardwareMap.get(DcMotor.class, "rightLift");
         claw = hardwareMap.get(Servo.class, "claw");
+        claw.setPosition(0);
+        claw2 = hardwareMap.get(Servo.class, "claw2");
+        claw2.setPosition(0);
 
         double liftPower = 0;
         double rightPower = 0, leftPower = 0;
@@ -33,8 +42,8 @@ public class FullOpMode extends LinearOpMode {
             //movement
             if (Math.abs(gamepad1.left_stick_x) > Math.abs(gamepad1.left_stick_y)) {
                 // minimize turn, too fast
-                rightPower = gamepad1.left_stick_x / 2;
-                leftPower = gamepad1.left_stick_x / 2;
+                rightPower = gamepad1.left_stick_x / 3;
+                leftPower = gamepad1.left_stick_x / 3;
             } else if (gamepad1.left_stick_x == gamepad1.left_stick_y) {
                 //nothing
                 rightPower = 0;
@@ -51,15 +60,21 @@ public class FullOpMode extends LinearOpMode {
             telemetry.addData("Left Drive", leftMotor.getPower());
 
             //grab
-            if (gamepad1.a) {
+            if (gamepad2.a) {
                 claw.setPosition(0);
-            } else if (gamepad1.b) {
-                claw.setPosition(0.4);
+            } else if (gamepad2.b) {
+                claw.setPosition(claw.getPosition() + 0.01);
             }
             telemetry.addData("Servo Position", claw.getPosition());
 
+            if(gamepad2.x) {
+                claw2.setPosition(claw2.getPosition() - 0.01);
+            } else if (gamepad2.y) {
+                claw2.setPosition(claw2.getPosition() + 0.01);
+            }
+
             //lift
-            liftPower = -this.gamepad1.right_stick_y;
+            liftPower = -this.gamepad2.left_stick_y;
             //set power
             rightLift.setPower(liftPower);
             leftLift.setPower(-liftPower);
