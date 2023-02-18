@@ -121,6 +121,7 @@ public class AutoTest extends LinearOpMode {
                 telemetry.addData("Overhead ms", camera.getOverheadTimeMs());
                 telemetry.addData("Pipeline ms", camera.getPipelineTimeMs());
                 telemetry.addData("rotation", Math.toDegrees(getYaw()));
+                telemetry.addData("target", referenceAngle);
 
                 // If we don't see any tags
                 if (detections.size() == 0) {
@@ -162,7 +163,7 @@ public class AutoTest extends LinearOpMode {
                             case 2:
                                 turn = 1;
                         }
-                        referenceAngle += getYaw();
+                        referenceAngle += getYaw() * turn;
                     }
                     found = true;
                 }
@@ -205,7 +206,7 @@ public class AutoTest extends LinearOpMode {
         double derivative = (error - lastError) / timer.seconds();
         lastError = error;
         timer.reset();
-        double output = (error * Kp) + (derivative * Kd) + (integralSum * Ki);
+        double output = 0.1 * Math.signum(error) + 0.9 * Math.tanh((error * Kp) + (derivative * Kd) + (integralSum * Ki));
         return output;
     }
     public double getYaw() {
