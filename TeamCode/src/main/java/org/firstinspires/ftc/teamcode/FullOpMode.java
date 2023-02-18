@@ -21,7 +21,6 @@ public class FullOpMode extends LinearOpMode {
         rightMotor = hardwareMap.get(DcMotor.class, "rightMotor");
         leftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightMotor.setDirection(DcMotor.Direction.REVERSE);
         leftMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         leftLift = hardwareMap.get(DcMotor.class, "leftLift");
@@ -34,6 +33,7 @@ public class FullOpMode extends LinearOpMode {
         double liftPower = 0;
         double rightPower = 0, leftPower = 0;
 
+        telemetry.addData("claw position", claw.getPosition());
         telemetry.addData("Status", "Sus");
         telemetry.update();
         waitForStart();
@@ -60,21 +60,27 @@ public class FullOpMode extends LinearOpMode {
             telemetry.addData("Left Drive", leftMotor.getPower());
 
             //grab
-            if (gamepad2.a) {
-                claw.setPosition(0);
-            } else if (gamepad2.b) {
-                claw.setPosition(claw.getPosition() + 0.01);
+            if(Math.abs(gamepad2.right_stick_x) > Math.abs(gamepad2.right_stick_y)) {
+                if(gamepad2.right_stick_x > 0) {
+                    claw.setPosition(claw.getPosition() - 0.001);
+                }
+                if(gamepad2.right_stick_x < 0) {
+                    claw.setPosition(claw.getPosition() + 0.001);
+                }
             }
-            telemetry.addData("Servo Position", claw.getPosition());
-
-            if(gamepad2.x) {
-                claw2.setPosition(claw2.getPosition() - 0.01);
-            } else if (gamepad2.y) {
-                claw2.setPosition(claw2.getPosition() + 0.01);
+            else {
+                if(gamepad2.right_stick_y < 0) {
+                    claw2.setPosition(claw2.getPosition() + 0.001);
+                }
+                if(gamepad2.right_stick_y > 0) {
+                    claw2.setPosition(claw2.getPosition() - 0.001);
+                }
             }
+            telemetry.addData("Claw Position", claw.getPosition());
+            telemetry.addData("Rotating thingy Position", claw2.getPosition());
 
             //lift
-            liftPower = -this.gamepad2.left_stick_y;
+            liftPower = -gamepad2.left_stick_y;
             //set power
             rightLift.setPower(liftPower);
             leftLift.setPower(-liftPower);

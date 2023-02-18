@@ -58,6 +58,7 @@ public class AutoTest extends LinearOpMode {
     ElapsedTime timer  = new ElapsedTime();
     private double lastError = 0;
     private BHI260IMU imu;
+    double referenceAngle = Math.toRadians(90);
 
     @Override
     public void runOpMode() {
@@ -153,17 +154,30 @@ public class AutoTest extends LinearOpMode {
                     }
                     if(!found) {
 //                        driveDistance(0.3, 0.6096);
+                        switch (idFound) {
+                            case 0:
+                                turn = -1;
+                            case 1:
+                                turn = 0;
+                            case 2:
+                                turn = 1;
+                        }
+                        referenceAngle += getYaw();
                     }
                     found = true;
                 }
                 telemetry.update();
             }
-            if(found) {
-                double referenceAngle = Math.toRadians(90);
+            if(found && turn != 0) {
                 double power = PIDControl(referenceAngle, getYaw());
                 telemetry.addData("motor power", power);
                 leftMotor.setPower(power);
                 rightMotor.setPower(-power);
+                if(referenceAngle - getYaw() < Math.toRadians(0.5))
+                    turn = 0;
+            }
+            if(turn == 0 && idFound != 1) {
+                driveDistance(0.3, 0.6096);
             }
         }
     }
