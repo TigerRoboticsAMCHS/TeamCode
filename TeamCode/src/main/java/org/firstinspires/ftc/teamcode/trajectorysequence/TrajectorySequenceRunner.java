@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.trajectorysequence;
 
+import static org.firstinspires.ftc.teamcode.drive.DriveConstants.RUN_USING_ENCODER;
+
 import androidx.annotation.Nullable;
 
 import com.acmerobotics.dashboard.FtcDashboard;
@@ -202,7 +204,7 @@ public class TrajectorySequenceRunner {
 
         final double NOMINAL_VOLTAGE = 12.0;
         double voltage = voltageSensor.getVoltage();
-        if (driveSignal != null && !DriveConstants.DriveConstants.RUN_USING_ENCODER) {
+        if (driveSignal != null && !RUN_USING_ENCODER) {
             driveSignal = new DriveSignal(
                     driveSignal.getVel().times(NOMINAL_VOLTAGE / voltage),
                     driveSignal.getAccel().times(NOMINAL_VOLTAGE / voltage)
