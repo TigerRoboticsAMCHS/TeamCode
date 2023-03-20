@@ -6,12 +6,16 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.IMU;
+
+import org.firstinspires.ftc.teamcode.drive.SampleMecanumDrive;
 
 import java.util.Arrays;
 
 @TeleOp(group = "main")
-public class TestDrive extends LinearOpMode {
+public class RobotCentricDrive extends LinearOpMode {
     private DcMotor BackRight, BackLeft, FrontRight, FrontLeft;
+    private IMU imu;
 
     public void runOpMode() {
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
@@ -24,14 +28,14 @@ public class TestDrive extends LinearOpMode {
         FrontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         FrontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         BackRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        SampleMecanumDrive drive = new SampleMecanumDrive(hardwareMap);
         waitForStart();
         while(opModeIsActive()) {
             double FrontLeftVal =  gamepad1.left_stick_y - (gamepad1.left_stick_x)  + -gamepad1.right_stick_x;
             double FrontRightVal =  gamepad1.left_stick_y  + (gamepad1.left_stick_x) - -gamepad1.right_stick_x;
             double BackLeftVal = gamepad1.left_stick_y  + (gamepad1.left_stick_x)  + -gamepad1.right_stick_x;
             double BackRightVal = gamepad1.left_stick_y - (gamepad1.left_stick_x) - -gamepad1.right_stick_x;
-
-            //Move range to between 0 and +1, if not already
+            // Move range to between 0 and +1, if not already
             double[] wheelPowers = {FrontRightVal, FrontLeftVal, BackLeftVal, BackRightVal};
             Arrays.sort(wheelPowers);
             if (wheelPowers[3] > 1) {
@@ -45,10 +49,7 @@ public class TestDrive extends LinearOpMode {
             BackLeftVal *= 2.0/3.0;
             BackRightVal *= 2.0/3.0;
 
-            FrontLeft.setPower(FrontLeftVal);
-            FrontRight.setPower(FrontRightVal);
-            BackLeft.setPower(BackLeftVal);
-            BackRight.setPower(BackRightVal);
+            drive.setMotorPowers(FrontLeftVal, BackLeftVal, BackRightVal, FrontRightVal);
 
             telemetry.addData("FL", FrontLeftVal);
             telemetry.addData("FR", FrontRightVal);
